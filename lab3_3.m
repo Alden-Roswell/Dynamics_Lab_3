@@ -2,34 +2,83 @@ clear;
 close all;
 clc;
 
+
+%% Sensor calibration
 Q1 = readmatrix("2026_02_10_001_GYRO_F02C05");
 Q1(:,3) = Q1(:,3)*pi/30;
 [P,s] = polyfit(Q1(:,3),Q1(:,2),1);
-P(1)
-P(2)
+k = P(1)
+bias = P(2)
 figure();
 hold on;
 scatter(Q1(:,3),Q1(:,2));
-x = linspace(-5,5,100)
-plot(x,P(2) + P(1)*x)
+x = linspace(-5,5,100);
+plot(x, P(1)*x, "--", color='red')
+plot(x,P(2)*ones(100))
+k = P(1);
+offset = P(2);
 
-q2 = readmatrix("2026_02_10_001_RWHEEL_T10t5");
+
+%%Spacecraft MOI
+q2 = readmatrix("2026_02_17_SCRAFT_T10t5");
 % Process the data from the matrices
-q2(1:1404,:) = [];
-q2(:,2);
-q2(q2(:,4)<0,:) = [];
-q2(q2(:,2) ~= 10,:) = [];
-
+%Condition data
+q2(q2(:,4)<0.01,:) = [];
+%Put data in correct units
 q2(:,3) = q2(:,3) * pi/30;
 q2(:,1) = q2(:,1) / 1000;
+figure()
+plot(q2(:,1), q2(:,3))
 
 figure()
 hold on;
-T = 10;
-[P,s] = polyfit(q2(:,1), q2(:,3),1)
-scatter(q2(:,1),q2(:,3))
-t = linspace(0,7,100)
+T = -10;
+
+T = mean(q2(:,4)) * 33.5; %Adjusting for current input
+[P,s] = polyfit(q2(:,1), q2(:,3),1);
+scatter(q2(:,1),q2(:,3));
+
+
+plot(q2(:,1),P(1)*q2(:,1) + P(2));
+alpha_SC = P(1);
+I_SC = abs(T/alpha_SC)/1000;
+disp(['Moment of Inertia for S/C: ', num2str(I_SC), 'kgm^2']);
+
+
+
+%%Reaction Wheel MOI
+Rwheel = readmatrix("2026_02_17_001_RWHEEL_T20t5");
+% Process the data from the matrices
+Rwheel(:,2);
+Rwheel(Rwheel(:,4)<0.4,:) = [];
+Rwheel(Rwheel(:,2) ~= 20.0,:) = [];
+
+Rwheel(:,3) = Rwheel(:,3) * pi/30;
+Rwheel(:,1) = Rwheel(:,1) / 1000;
+
+figure()
+hold on;
+T = mean(Rwheel(:,4)) * 33.5; %Adjusting for current input
+[P,s] = polyfit(Rwheel(:,1), Rwheel(:,3),1);
+scatter(Rwheel(:,1),Rwheel(:,3))
+t = linspace(0,7,100);
 plot(t,P(1)*t + P(2))
-alpha = P(1);
-I = T/alpha;
-P(2)
+alpha_wheel = P(1);
+I_wheel = abs(T/alpha_wheel)/1000;
+disp(['Moment of Inertia for Reaction Wheel: ', num2str(I_wheel), 'kgm^2']);
+
+
+%%gains
+
+kp = 70/1000;
+kd_crit = 2*sqrt(kp*I_SC)*1000
+% Because critically damped kd is > than 40 that is the limiting factor
+% reduced kp to 80 and found an acceptable overshoot and settling time
+% through trial and error.
+
+kd = 40/1000;
+numerator = [0,0,kp/I_SC]
+denomentor = [1, kd/I_SC, kp/I_SC]
+H = tf(numerator,denomentor)
+
+stepplot(H)
