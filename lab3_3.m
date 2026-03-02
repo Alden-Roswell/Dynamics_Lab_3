@@ -47,17 +47,17 @@ disp(['Moment of Inertia for S/C: ', num2str(I_SC), 'kgm^2']);
 
 
 %%Reaction Wheel MOI
-Rwheel = readmatrix("2026_02_17_001_RWHEEL_T20t5");
+Rwheel = readmatrix("2026_02_24_001_RWHEEL_T18t5");
 % Process the data from the matrices
 Rwheel(:,2);
 Rwheel(Rwheel(:,4)<0.4,:) = [];
-Rwheel(Rwheel(:,2) ~= 20.0,:) = [];
-
+Rwheel(Rwheel(:,2) ~= 18.0,:) = [];
 Rwheel(:,3) = Rwheel(:,3) * pi/30;
 Rwheel(:,1) = Rwheel(:,1) / 1000;
 
 figure()
 hold on;
+title('reaction wheel')
 T = mean(Rwheel(:,4)) * 33.5; %Adjusting for current input
 [P,s] = polyfit(Rwheel(:,1), Rwheel(:,3),1);
 scatter(Rwheel(:,1),Rwheel(:,3))
@@ -67,7 +67,37 @@ alpha_wheel = P(1);
 I_wheel = abs(T/alpha_wheel)/1000;
 disp(['Moment of Inertia for Reaction Wheel: ', num2str(I_wheel), 'kgm^2']);
 
+files = ["2026_02_24_001_RWHEEL_T07t5",
+         "2026_02_24_001_RWHEEL_T10t5",
+         "2026_02_24_001_RWHEEL_T14t5",
+         "2026_02_24_001_RWHEEL_T15t5",
+         "2026_02_24_001_RWHEEL_T18t5"]
+torques = [7,10,14,15,18];
 
+%%run test for all 5 reaction wheel tests and compile MOIs
+for i = 1:5
+
+Rwheel = readmatrix(files(i));
+
+% Process the data from the matrices
+Rwheel(:,2);
+Rwheel(Rwheel(:,4)<0.4*torques(i)/18,:) = [];
+Rwheel(abs(Rwheel(:,2) - torques(i))>0.1,:) = [];
+Rwheel(:,3) = Rwheel(:,3) * pi/30;
+Rwheel(:,1) = Rwheel(:,1) / 1000;
+
+
+T = mean(Rwheel(:,4)) * 33.5; %Adjusting for current input
+[P,s] = polyfit(Rwheel(:,1), Rwheel(:,3),1);
+scatter(Rwheel(:,1),Rwheel(:,3))
+t = linspace(0,7,100);
+plot(t,P(1)*t + P(2))
+alpha_wheel = P(1);
+I_wheel_all_tests(i) = abs(T/alpha_wheel)/1000;
+
+end
+mean(I_wheel_all_tests)
+std(I_wheel_all_tests)
 %%gains
 
 kp = 70/1000;
@@ -77,8 +107,18 @@ kd_crit = 2*sqrt(kp*I_SC)*1000
 % through trial and error.
 
 kd = 40/1000;
-numerator = [0,0,kp/I_SC]
-denomentor = [1, kd/I_SC, kp/I_SC]
-H = tf(numerator,denomentor)
-
+numerator = [0,0,kp/I_SC];
+denomentor = [1, kd/I_SC, kp/I_SC];
+H = tf(numerator,denomentor);
+figure()
 stepplot(H)
+
+control = readmatrix("2026_02_24_001_CONTROLTest1_110_37");
+control(1,:) = [];
+control(:,3) = control(:,3) - control(1,2) - control(1,3);
+control(:,1) = control(:,1) - control(1,1);
+control(1000:end, :)  = [];
+figure()
+hold on;
+plot(control(:,1), control(:,2))
+plot(control(:,1), control(:,3))
